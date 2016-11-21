@@ -2,15 +2,32 @@ const QueryParamSelectorComponent = {
     templateUrl: 'queryBuilder/queryParamSelector/queryParamSelector.tpl.html',
     bindings:    {},
 	transclude: true,    
-    controller: ['$rootScope','$scope','GeneSearchService','_',function($rootScope, $scope,GeneSearchService, _) {
+    controller: [
+                    '$rootScope',
+                    '$scope',
+                    'GeneSearchService',
+                    'DiseaseSearchService',
+                    '_',
+                    '$state',
+        function($rootScope, $scope,GeneSearchService, DiseaseSearchService, _, $state) {
         	'ngInject';
         	const vm = this;
-        	vm.geneQuery='';
+            const searchServices = {
+                'mutations': GeneSearchService,
+                'disease': DiseaseSearchService
+            };
+
+            vm.currentState = ()=>$state.current.name.split('.')[2];
+            vm.instructionsTemplate = `queryBuilder/queryParamSelector/${vm.currentState()}_instructions.tpl.html`;
+
+
+        	vm.searchQuery='';
         	vm.results =[];
             
+
             $rootScope.$on('paramSearch:reset', ()=>{
                 vm.results =[];
-                vm.geneQuery='';
+                vm.searchQuery='';
                 document.querySelector('input').focus();
             });
 
@@ -19,24 +36,26 @@ const QueryParamSelectorComponent = {
         	this.addGene = gene=>{
         		let mutationIndex = _.indexOf(_.pluck(vm.results, '_id'), gene._id);
                 vm.results.splice(mutationIndex,1);
-        		$rootScope.$emit('mutationSet:add', {
-        			id:  gene.symbol,
-					name:gene.name,
-					desc:gene._score
-        		});
+        		$rootScope.$emit('mutationSet:add', gene);
         	};
 
 
         	this.onInputChange = ()=>{
-                console.log(`vm.geneQuery: ${vm.geneQuery} (${vm.geneQuery.length})`);
-
-                if(vm.geneQuery.length <= 0){
+                console.info(`query: ${vm.searchQuery}`);
+                // TODO: 
+                //  - debounce this call so we're not blowing up the servers on every keystroke
+                //  - show loading graphic 
+                //  - reset search on user actions
+                if(vm.searchQuery.length <= 0){
                     vm.results = [];
                 }else{
-                    GeneSearchService.get(vm.geneQuery)
-                                 .then(data=>{
-                                     $scope.$apply(()=>{vm.results = data.hits;})
-                    });
+                    searchServices[vm.currentState()]
+                        .get(vm.searchQuery)
+                        .then(data=>{
+                            let queryResults = data.results || data.data.hits;
+                            
+                            $scope.$apply(()=>{vm.results = queryResults});
+                        });
                 } 
         	};
 
